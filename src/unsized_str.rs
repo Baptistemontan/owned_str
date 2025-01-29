@@ -268,8 +268,8 @@ impl UnsizedStr {
     /// [UnsizedStr]: UnsizedStr
     /// [self.len()]: Self::len
     /// [self.capacity()]: Self::capacity
-    /// [`downcast_exact`]: Self::downcast_exact
-    /// [`downcast`]: Self::downcast
+    /// [`downcast_exact_mut`]: Self::downcast_exact
+    /// [`downcast_mut`]: Self::downcast_mut
     pub const fn downcast_truncate<const SIZE: usize>(
         this: &mut Self,
     ) -> Option<&mut OwnedStr<SIZE>> {
