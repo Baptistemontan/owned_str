@@ -1,0 +1,27 @@
+name: Tests
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  lib_test:
+    name: Test owned_str package
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Load cargo toolchain"
+        uses: dtolnay/rust-toolchain@nightly
+      - name: "Install clippy"
+        run: rustup component add clippy
+      - name: "Install miri"
+        run: rustup component add miri
+      - name: "Run clippy"
+        run: cargo clippy
+      - name: "Test with MIRI"
+        run: cargo miri test
