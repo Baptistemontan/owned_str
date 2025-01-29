@@ -30,6 +30,12 @@
 //!
 //! fn main() {
 //!     assert_eq!(S, "hello worl");
+//!
+//!     // allow stack based string formatting
+//!     use std::fmt::Write;
+//!     let mut buff = OwnedStr::<32>::new();
+//!     write!(&mut buff, "format {} arguments", "some").unwrap();
+//!     assert_eq!(buff, "format some arguments");
 //! }
 //! ```
 

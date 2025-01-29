@@ -8,15 +8,13 @@ This as 2 benefits:
 - A lot of functions can be marked `const`, so you can create/manipulate strings at compile time.
 
 ```rust
-#![no_std]
-
 use owned_str::{OwnedStr, UnsizedStr};
 
 const fn make_str() -> OwnedStr<16> {
     let mut buff = OwnedStr::new();
     let s: &mut UnsizedStr = buff.unsize_mut(); // you can use `unsize_mut` to get a size erased handle
     s.push_str("hello");
-    push_world(s)
+    push_world(s);
     buff
 }
 
@@ -30,5 +28,11 @@ const S: &str = make_str().as_str();
 
 fn main() {
     assert_eq!(S, "hello worl");
+
+    // allow stack based string formatting
+    use std::fmt::Write;
+    let mut buff = OwnedStr::<32>::new();
+    write!(&mut buff, "format {} arguments", "some").unwrap();
+    assert_eq!(buff, "format some arguments");
 }
 ```
