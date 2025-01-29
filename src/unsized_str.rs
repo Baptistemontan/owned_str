@@ -835,7 +835,7 @@ impl UnsizedStr {
     ///
     /// let s = OwnedStr::<16>::new_from_str("abc");
     /// assert_eq!(s.contain_str("bc"), true);
-    /// assert_eq!(s.contain_char("ad"), false);
+    /// assert_eq!(s.contain_str("ad"), false);
     /// ```
     pub const fn contain_str(&self, s: &str) -> bool {
         self.find_str(s).is_some()

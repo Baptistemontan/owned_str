@@ -35,7 +35,7 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 /// const fn push_things(s: &mut UnsizedStr) {
 ///     s.push_str("Hello");
 ///     s.push(' ');
-///     s.push("world!");
+///     s.push_str("world!");
 /// }
 ///
 /// push_things(&mut os);

@@ -10,15 +10,13 @@
 //! - A lot of functions can be marked `const`, so you can create/manipulate strings at compile time.
 //!
 //! ```rust
-//! #![no_std]
-//!
 //! use owned_str::{OwnedStr, UnsizedStr};
 //!
 //! const fn make_str() -> OwnedStr<16> {
 //!     let mut buff = OwnedStr::new();
-//!     buff.push_str("hello");
 //!     let s: &mut UnsizedStr = buff.unsize_mut(); // you can use `unsize_mut` to get a size erased handle
-//!     push_world(s)
+//!     s.push_str("hello");
+//!     push_world(s);
 //!     buff
 //! }
 //!
