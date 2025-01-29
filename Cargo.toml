@@ -6,7 +6,7 @@ authors = ["Baptiste de Montangon"]
 license = "MIT"
 repository = "https://github.com/Baptistemontan/owned_str"
 description = "Provide a stack allocated String for no-std or const environement"
-readme = "../README.md"
+readme = "./README.md"
 
 [dependencies]
 
