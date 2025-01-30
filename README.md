@@ -12,7 +12,8 @@ use owned_str::{OwnedStr, UnsizedStr};
 
 const fn make_str() -> OwnedStr<16> {
     let mut buff = OwnedStr::new();
-    let s: &mut UnsizedStr = buff.unsize_mut(); // you can use `unsize_mut` to get a size erased handle
+    // you can use `unsize_mut` to get a size erased handle
+    let s: &mut UnsizedStr = buff.unsize_mut();
     s.push_str("hello");
     push_world(s);
     buff
@@ -36,3 +37,5 @@ fn main() {
     assert_eq!(buff, "format some arguments");
 }
 ```
+
+If you would like to see a `String` method not already implemented, or a `str` method that could be made const, feel free to open an issue on github and PR are welcome!
