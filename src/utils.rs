@@ -102,6 +102,7 @@ pub const fn utf8_is_cont_byte(byte: u8) -> bool {
     (byte as i8) < -64
 }
 
+/// Caller must ensure that buff is valid UTF8 and not empty.
 #[inline(never)]
 pub const unsafe fn next_code_point_rev(buff: &[u8]) -> u32 {
     #[inline(always)]

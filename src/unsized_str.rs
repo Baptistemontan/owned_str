@@ -128,6 +128,9 @@ impl UnsizedStr {
     /// [self.capacity()]: Self::capacity
     /// [`downcast`]: Self::downcast
     pub const unsafe fn downcast_unchecked<const SIZE: usize>(this: &Self) -> &OwnedStr<SIZE> {
+        // Safety
+        // if SIZE is in the range `[len, cap]` then it is safe to do this cast
+        // SIZE check is relagated to the caller.
         let p = this as *const Self as *const OwnedStr<SIZE>;
         unsafe { &*p }
     }
@@ -149,6 +152,7 @@ impl UnsizedStr {
         if SIZE < this.len || SIZE > this.buff.len() {
             None
         } else {
+            // SIZE validity is checked above
             Some(unsafe { Self::downcast_unchecked(this) })
         }
     }
@@ -166,6 +170,7 @@ impl UnsizedStr {
         if SIZE != this.buff.len() {
             None
         } else {
+            // SIZE validity is checked above
             Some(unsafe { Self::downcast_unchecked(this) })
         }
     }
@@ -186,6 +191,7 @@ impl UnsizedStr {
     pub const unsafe fn downcast_unchecked_mut<const SIZE: usize>(
         this: &mut Self,
     ) -> &mut OwnedStr<SIZE> {
+        // Same reasoning as `downcast_unchecked`.
         let p = this as *mut Self as *mut OwnedStr<SIZE>;
         unsafe { &mut *p }
     }
@@ -219,6 +225,7 @@ impl UnsizedStr {
         if SIZE < this.len || SIZE > this.buff.len() {
             None
         } else {
+            // SIZE validity is checked above
             Some(unsafe { Self::downcast_unchecked_mut(this) })
         }
     }
@@ -253,6 +260,7 @@ impl UnsizedStr {
         if SIZE != this.buff.len() {
             None
         } else {
+            // SIZE validity is checked above
             Some(unsafe { Self::downcast_unchecked_mut(this) })
         }
     }
@@ -283,6 +291,7 @@ impl UnsizedStr {
                 return None;
             }
         }
+        // SIZE validity is checked above
         Some(unsafe { Self::downcast_unchecked_mut(this) })
     }
 
@@ -330,7 +339,10 @@ impl UnsizedStr {
     ///
     /// This is equivalent to `self.as_str().as_bytes()`.
     pub const fn as_bytes(&self) -> &[u8] {
-        let ptr = self.buff.as_ptr().cast();
+        // The only footgun here would be if part of buff as not been initialized,
+        // but we know that the buffer is initialized for at least `len` bytes.
+        // So this is safe
+        let ptr = self.buff.as_ptr().cast::<u8>();
         unsafe { core::slice::from_raw_parts(ptr, self.len) }
     }
 
@@ -344,7 +356,10 @@ impl UnsizedStr {
     ///
     /// Use of a `OwnedStr` whose contents are not valid UTF-8 is undefined behavior.
     pub const unsafe fn as_bytes_mut(&mut self) -> &mut [u8] {
-        let ptr = self.buff.as_mut_ptr().cast();
+        // The only footgun here would be if part of buff as not been initialized,
+        // but we know that the buffer is initialized for at least `len` bytes.
+        // So this is safe
+        let ptr = self.buff.as_mut_ptr().cast::<u8>();
         unsafe { core::slice::from_raw_parts_mut(ptr, self.len) }
     }
 
@@ -364,10 +379,8 @@ impl UnsizedStr {
     /// [`set_len`]: Self::set_len
     /// [`as_buffer_mut`]: Self::as_buffer_mut
     pub const fn spare_bytes_mut(&mut self) -> &mut [MaybeUninit<u8>] {
-        unsafe {
-            let ptr = self.buff.as_mut_ptr().add(self.len);
-            core::slice::from_raw_parts_mut(ptr, self.buff.len() - self.len)
-        }
+        // Safety: we know that len is less than buff.len()
+        unsafe { self.buff.split_at_mut_unchecked(self.len).1 }
     }
 
     /// Convert self to a mutable byte slice, also containing the spare bytes.
@@ -388,6 +401,7 @@ impl UnsizedStr {
     ///
     /// [`str`]: str
     pub const fn as_str(&self) -> &str {
+        // Safety: The buffer is valid UTF8.
         let bytes = Self::as_bytes(self);
         unsafe { core::str::from_utf8_unchecked(bytes) }
     }
@@ -396,6 +410,7 @@ impl UnsizedStr {
     ///
     /// [`str`]: str
     pub const fn as_str_mut(&mut self) -> &mut str {
+        // Safety: The buffer is valid UTF8.
         unsafe {
             let bytes = Self::as_bytes_mut(self);
             core::str::from_utf8_unchecked_mut(bytes)
@@ -496,21 +511,7 @@ impl UnsizedStr {
     /// assert!(err.is_err());
     /// ```
     pub const fn try_push(&mut self, c: char) -> Result<&mut Self> {
-        let c_len = c.len_utf8();
-        let new_len = c_len + self.len;
-        if new_len > self.buff.len() {
-            return Err(Error {
-                spare_capacity: self.buff.len() - self.len,
-                needed_capacity: c_len,
-            });
-        }
-        let buff = unsafe {
-            let ptr = self.buff.as_mut_ptr().cast::<u8>().add(self.len);
-            core::slice::from_raw_parts_mut(ptr, c_len)
-        };
-        c.encode_utf8(buff);
-        self.len = new_len;
-        Ok(self)
+        self.try_push_str(c.encode_utf8(&mut [0; 4]))
     }
 
     /// Appends the given [`char`] to the end.
@@ -563,22 +564,42 @@ impl UnsizedStr {
     /// assert!(err.is_err());
     /// ```
     pub const fn try_push_str(&mut self, s: &str) -> Result<&mut Self> {
-        let s_len = s.len();
-        let new_len = s_len + self.len;
-        if new_len > self.buff.len() {
-            return Err(Error {
-                spare_capacity: self.buff.len() - self.len,
-                needed_capacity: s_len,
-            });
-        }
-        unsafe {
-            let src = s.as_bytes().as_ptr();
-            let dest = self.buff.as_mut_ptr().cast::<u8>().add(self.len);
-            core::ptr::copy_nonoverlapping(src, dest, s_len);
-        }
+        let new_len = match s.len().checked_add(self.len) {
+            // check that new_len does not overflow on addition and is in the capacity
+            Some(new_len) if new_len <= self.buff.len() => new_len,
+            _ => {
+                return Err(Error {
+                    spare_capacity: self.buff.len() - self.len,
+                    needed_capacity: s.len(),
+                });
+            }
+        };
+
+        // Capacity has been checked above.
+        unsafe { self.push_str_unchecked(s) };
 
         self.len = new_len;
         Ok(self)
+    }
+
+    /// Append a given string slice onto the end without performing any checks.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the buffer has enough spare capacity to write this value.
+    pub const unsafe fn push_str_unchecked(&mut self, s: &str) -> &mut Self {
+        // s is valid UTF8 so it can be copied at the end of the buffer,
+        // possible overflow checks are relegated to the caller.
+        unsafe {
+            let src = s.as_bytes().as_ptr();
+            let dest = self.buff.as_mut_ptr().cast::<u8>().add(self.len);
+            // s and buff can't overlap for 2 reasons:
+            // - aliasing: can't have a mutable ref to self AND a string ref into it.
+            // - end of buff is not initialized, can't have a str ref into it without unsafe.
+            core::ptr::copy_nonoverlapping(src, dest, s.len());
+        }
+
+        self
     }
 
     /// Appends a given string slice onto the end.
@@ -608,6 +629,11 @@ impl UnsizedStr {
         self
     }
 
+    /// Return the byte at the given index without perfoming any checks
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure that `index <= self.len`.
     const unsafe fn get_byte_unchecked(&self, index: usize) -> u8 {
         unsafe { self.buff.as_ptr().cast::<u8>().add(index).read() }
     }
@@ -643,6 +669,7 @@ impl UnsizedStr {
         } else if index >= self.len {
             index == self.len
         } else {
+            // index is in the range of the initialized part of the buffer, we can read the byte there.
             crate::utils::is_utf8_char_boundary(unsafe { self.get_byte_unchecked(index) })
         }
     }
@@ -668,6 +695,7 @@ impl UnsizedStr {
         if self.is_empty() {
             None
         } else {
+            // We know bytes are valid UTF8 and we checked the length above.
             let c = unsafe { crate::utils::next_code_point_rev(self.as_bytes()) };
             let c = unsafe { char::from_u32_unchecked(c) };
             self.len -= c.len_utf8();
@@ -689,6 +717,9 @@ impl UnsizedStr {
     /// Return `None` if `mid` is not on a UTF-8 code point boundary, or if it is past
     /// the end of the last code point of the string slice.
     ///
+    /// This does the same things as [`str::split_at_checked`] but is unstable at the moment in a const context.
+    /// If you can use the `str` method, we advise you to do.
+    ///
     /// # Examples
     ///
     /// ```
@@ -707,6 +738,7 @@ impl UnsizedStr {
         if mid > self.len || !self.is_char_boundary(mid) {
             return None;
         }
+        // mid is inside the string and is a char boundary, it is safe to split here.
         unsafe {
             let (a, b) = self.as_bytes().split_at_unchecked(mid);
             Some((
@@ -729,6 +761,9 @@ impl UnsizedStr {
     /// Return `None` if `mid` is not on a UTF-8 code point boundary, or if it is past
     /// the end of the last code point of the string slice.
     ///
+    /// This does the same things as [`str::split_at_checked_mut`] but is unstable at the moment in a const context.
+    /// If you can use the `str` method, we advise you to do.
+    ///
     /// # Examples
     ///
     /// ```
@@ -749,6 +784,7 @@ impl UnsizedStr {
         if mid > self.len || !self.is_char_boundary(mid) {
             return None;
         }
+        // mid is inside the string and is a char boundary, it is safe to split here.
         unsafe {
             let (a, b) = self.as_bytes_mut().split_at_mut_unchecked(mid);
             Some((
@@ -791,10 +827,13 @@ impl UnsizedStr {
         }
 
         let bytes = unsafe {
+            // we have capacity to push the null byte, but we don't want to push it, just that it exist
+            // We can write it at the end of the buffer
             core::ptr::write(
                 self.buff.as_mut_ptr().add(self.len),
                 MaybeUninit::new(b'\0'),
             );
+            // now that the byte has been initialized, we can take a byte slice ending with the null byte.
             let ptr = self.buff.as_ptr().cast::<u8>();
             core::slice::from_raw_parts(ptr, self.len + 1)
         };
