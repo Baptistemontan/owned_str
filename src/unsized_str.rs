@@ -541,6 +541,16 @@ impl UnsizedStr {
         self
     }
 
+    /// Append a given char onto the end without performing any checks.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the buffer has enough spare capacity to write this value.
+    pub const unsafe fn push_unchecked(&mut self, c: char) -> &mut Self {
+        // capacity check is relegated to the caller.
+        unsafe { self.push_str_unchecked(c.encode_utf8(&mut [0; 4])) }
+    }
+
     /// Tries to append a given string slice onto the end.
     ///
     /// Return an error if there is'nt enough space.
@@ -564,9 +574,9 @@ impl UnsizedStr {
     /// assert!(err.is_err());
     /// ```
     pub const fn try_push_str(&mut self, s: &str) -> Result<&mut Self> {
-        let new_len = match s.len().checked_add(self.len) {
-            // check that new_len does not overflow on addition and is in the capacity
-            Some(new_len) if new_len <= self.buff.len() => new_len,
+        match s.len().checked_add(self.len) {
+            // check that the new len does not overflow on addition and is in the capacity
+            Some(new_len) if new_len <= self.buff.len() => {}
             _ => {
                 return Err(Error {
                     spare_capacity: self.buff.len() - self.len,
@@ -576,10 +586,7 @@ impl UnsizedStr {
         };
 
         // Capacity has been checked above.
-        unsafe { self.push_str_unchecked(s) };
-
-        self.len = new_len;
-        Ok(self)
+        Ok(unsafe { self.push_str_unchecked(s) })
     }
 
     /// Append a given string slice onto the end without performing any checks.
@@ -598,6 +605,8 @@ impl UnsizedStr {
             // - end of buff is not initialized, can't have a str ref into it without unsafe.
             core::ptr::copy_nonoverlapping(src, dest, s.len());
         }
+
+        self.len += s.len();
 
         self
     }
