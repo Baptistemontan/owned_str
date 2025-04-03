@@ -9,5 +9,8 @@ description = "Provide a stack allocated String for no-std or const environement
 readme = "./README.md"
 
 [dependencies]
+serde = { version = "1.0", default-features = false, optional = true }
 
 [features]
+default = []
+serde = ["dep:serde"]

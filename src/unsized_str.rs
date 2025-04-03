@@ -1059,6 +1059,21 @@ impl Write for UnsizedStr {
     }
 }
 
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::UnsizedStr;
+    use serde::Serialize;
+
+    impl Serialize for UnsizedStr {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            <str as Serialize>::serialize(self.as_str(), serializer)
+        }
+    }
+}
+
 #[track_caller]
 #[cold]
 const fn push_panic() -> ! {
