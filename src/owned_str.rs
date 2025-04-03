@@ -75,10 +75,16 @@ impl<const SIZE: usize> OwnedStr<SIZE> {
     /// Construct an `OwnedStr` of a given `SIZE` from a string slice.
     ///
     /// This is equivalent to `OwnedStr::new()` and pushing the string.
+    #[track_caller]
     pub const fn new_from_str(s: &str) -> Self {
+        #[track_caller]
+        #[cold]
+        const fn new_from_str_failed() -> ! {
+            panic!("Tried to create a OwnedStr with a str exceeding capacity.")
+        }
         match Self::try_new_from_str(s) {
             Ok(this) => this,
-            Err(_) => todo!(),
+            Err(_) => new_from_str_failed(),
         }
     }
 
