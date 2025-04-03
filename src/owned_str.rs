@@ -303,6 +303,50 @@ impl<const SIZE: usize> Write for OwnedStr<SIZE> {
     }
 }
 
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::OwnedStr;
+    use serde::{de::Visitor, Deserialize, Serialize};
+
+    impl<const SIZE: usize> Serialize for OwnedStr<SIZE> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            <str as Serialize>::serialize(self.as_str(), serializer)
+        }
+    }
+
+    impl<'de, const SIZE: usize> Deserialize<'de> for OwnedStr<SIZE> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_str(OwnedStrVisitor)
+        }
+    }
+
+    struct OwnedStrVisitor<const SIZE: usize>;
+
+    impl<const SIZE: usize> Visitor<'_> for OwnedStrVisitor<SIZE> {
+        type Value = OwnedStr<SIZE>;
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            match OwnedStr::try_new_from_str(v) {
+                Ok(v) => Ok(v),
+                Err(err) => Err(E::custom(err)),
+            }
+        }
+
+        fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+            write!(formatter, "a string of maximum len {}", SIZE)
+        }
+    }
+}
+
 impl Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
