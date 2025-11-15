@@ -1,4 +1,4 @@
-#![no_std]
+// #![no_std]
 #![forbid(missing_docs)]
 //! # Owned Str
 //!
@@ -40,6 +40,7 @@
 //! ```
 
 mod owned_str;
+mod owned_vec;
 mod unsized_str;
 mod utils;
 
